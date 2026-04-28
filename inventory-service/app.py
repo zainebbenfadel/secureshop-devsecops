@@ -9,9 +9,13 @@ import sqlite3
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)
+# Get the directory where this script lives
+import tempfile
 
-DB_PATH = os.environ.get("DB_PATH", "inventory.db")
 
+# Use temp directory for development
+DB_PATH = os.environ.get("DB_PATH", os.path.join(tempfile.gettempdir(), "inventory.db"))
+print(f"Using database at: {DB_PATH}")
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
