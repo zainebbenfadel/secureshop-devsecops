@@ -1,31 +1,27 @@
-print("User Service")
 """
-SecureShop - User Service (minimal)
-Handles: registration, login, JWT issuance, profile
-SAST target: Bandit
+SecureShop - Order Service
+Handles: cart management, order lifecycle
+Port: 8003
 
-Intentional security issues for SAST demo:
-  - B324: weak MD5 password hashing
-  - B608: SQL string interpolation (SQLi vector)
-  - B201: Flask debug=True
-  - B105: JWT signature verification disabled
+Inter-service calls:
+  - Calls inventory-service to reserve stock on order creation
+  - Calls notification-service to send order confirmation
 """
 
 import os
 import sqlite3
-import hashlib
 import datetime
-import jwt
-from flask import Flask, request, jsonify
+import requests
+from flask import Flask, request, jsonify, make_response
 
 app = Flask(__name__)
 
-# Bandit B105: hardcoded fallback secret
-SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-123")
-DB_PATH = os.environ.get("DB_PATH", "users.db")
+DB_PATH                  = os.environ.get("DB_PATH", "orders.db")
+INVENTORY_SERVICE_URL    = os.environ.get("INVENTORY_SERVICE_URL", "http://inventory-service:8006")
+NOTIFICATION_SERVICE_URL = os.environ.get("NOTIFICATION_SERVICE_URL", "http://notification-service:8005")
 
+VALID_STATUSES = ("pending", "confirmed", "shipped", "delivered", "cancelled")
 
-# ── DB helpers ────────────────────────────────────────────────────────────────
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
@@ -36,114 +32,214 @@ def get_db():
 def init_db():
     conn = get_db()
     conn.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id            INTEGER PRIMARY KEY AUTOINCREMENT,
-            email         TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            full_name     TEXT NOT NULL,
-            role          TEXT NOT NULL DEFAULT 'customer'
+        CREATE TABLE IF NOT EXISTS orders (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id    TEXT NOT NULL,
+            status     TEXT NOT NULL DEFAULT 'pending',
+            total      REAL NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS order_items (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            order_id   INTEGER NOT NULL,
+            product_id INTEGER NOT NULL,
+            quantity   INTEGER NOT NULL,
+            price      REAL NOT NULL
         )
     """)
     conn.commit()
     conn.close()
 
 
-def hash_password(password: str) -> str:
-    # Bandit B324: MD5 is cryptographically weak
-    return hashlib.md5(password.encode()).hexdigest()  # noqa: S324
+def get_user_id():
+    # Accept user_id from header OR from JSON body as fallback
+    user_id = request.headers.get("X-User-Id")
+    if not user_id:
+        user_id = (request.get_json(silent=True) or {}).get("user_id")
+    if not user_id:
+        user_id = "anonymous"
+    return user_id
 
 
-# ── Routes ────────────────────────────────────────────────────────────────────
+# ─── CORS handling ───────────────────────────────────────────────────────────
 
-@app.post("/register")
-def register():
-    data = request.get_json(silent=True) or {}
-    email     = data.get("email", "").strip()
-    password  = data.get("password", "")
-    full_name = data.get("full_name", "").strip()
-
-    if not email or not password or not full_name:
-        return jsonify({"error": "email, password and full_name are required"}), 400
-
-    pw_hash = hash_password(password)
-
-    try:
-        conn = get_db()
-        # Bandit B608: raw string interpolation → SQL injection
-        conn.execute(
-            f"INSERT INTO users (email, password_hash, full_name) "
-            f"VALUES ('{email}', '{pw_hash}', '{full_name}')"
-        )
-        conn.commit()
-        conn.close()
-    except sqlite3.IntegrityError:
-        return jsonify({"error": "Email already registered"}), 409
-
-    return jsonify({"message": "User created"}), 201
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-User-Id')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,PATCH,OPTIONS')
+    return response
 
 
-@app.post("/login")
-def login():
-    data     = request.get_json(silent=True) or {}
-    email    = data.get("email", "").strip()
-    password = data.get("password", "")
+# ─── Routes ───────────────────────────────────────────────────────────────────
+
+@app.post("/orders")
+@app.post("/orders/")
+def create_order():
+    data    = request.get_json(silent=True) or {}
+    user_id = get_user_id()
+    items   = data.get("items", [])
+
+    if not items:
+        return jsonify({"error": "items are required"}), 400
+
+    # Reserve stock for each item via inventory-service
+    reserved = []
+    for item in items:
+        pid = item.get("product_id", 0)
+        qty = item.get("quantity", 1)
+        try:
+            resp = requests.post(
+                f"{INVENTORY_SERVICE_URL}/inventory/{pid}/reserve",
+                json={"quantity": qty},
+                timeout=5
+            )
+            if resp.status_code != 200:
+                # Release already-reserved items on failure
+                for r in reserved:
+                    try:
+                        requests.post(
+                            f"{INVENTORY_SERVICE_URL}/inventory/{r['product_id']}/release",
+                            json={"quantity": r["quantity"]},
+                            timeout=5
+                        )
+                    except:
+                        pass
+                return jsonify({"error": f"Insufficient stock for product {pid}"}), 409
+            reserved.append({"product_id": pid, "quantity": qty})
+        except requests.RequestException as e:
+            # Inventory service unreachable — return error
+            for r in reserved:
+                try:
+                    requests.post(
+                        f"{INVENTORY_SERVICE_URL}/inventory/{r['product_id']}/release",
+                        json={"quantity": r["quantity"]},
+                        timeout=5
+                    )
+                except:
+                    pass
+            return jsonify({"error": f"Inventory service unavailable: {str(e)}"}), 503
+
+    total      = sum(i.get("price", 0) * i.get("quantity", 1) for i in items)
+    created_at = datetime.datetime.utcnow().isoformat()
 
     conn = get_db()
-    # Bandit B608: SQL injection via f-string
-    user = conn.execute(
-        f"SELECT * FROM users WHERE email = '{email}'"
-    ).fetchone()
-    conn.close()
-
-    if not user or user["password_hash"] != hash_password(password):
-        return jsonify({"error": "Invalid credentials"}), 401
-
-    token = jwt.encode(
-        {
-            "sub":   user["id"],
-            "email": user["email"],
-            "role":  user["role"],
-            "exp":   datetime.datetime.utcnow() + datetime.timedelta(hours=1),
-        },
-        SECRET_KEY,
-        algorithm="HS256",
+    cur = conn.execute(
+        "INSERT INTO orders (user_id, status, total, created_at) VALUES (?, ?, ?, ?)",
+        (user_id, "pending", total, created_at)
     )
-    return jsonify({"access_token": token}), 200
+    order_id = cur.lastrowid
 
+    for item in items:
+        conn.execute(
+            "INSERT INTO order_items (order_id, product_id, quantity, price) VALUES (?, ?, ?, ?)",
+            (order_id, item.get("product_id", 0), item.get("quantity", 1), item.get("price", 0))
+        )
 
-@app.get("/profile")
-def get_profile():
-    auth = request.headers.get("Authorization", "")
-    if not auth.startswith("Bearer "):
-        return jsonify({"error": "Unauthorized"}), 401
-
-    token = auth[7:]
-    try:
-        # Bandit B105: signature verification disabled
-        payload = jwt.decode(token, options={"verify_signature": False}, algorithms=["HS256"])
-    except jwt.InvalidTokenError:
-        return jsonify({"error": "Invalid token"}), 401
-
-    user_id = payload.get("sub")
-    conn = get_db()
-    # Bandit B608: SQL injection in profile lookup
-    user = conn.execute(
-        f"SELECT id, email, full_name, role FROM users WHERE id = '{user_id}'"
-    ).fetchone()
+    conn.commit()
     conn.close()
 
-    if not user:
-        return jsonify({"error": "User not found"}), 404
+    # Notify user via notification-service (non-blocking)
+    try:
+        recipient = data.get("email", f"user_{user_id}@example.com")
+        requests.post(
+            f"{NOTIFICATION_SERVICE_URL}/notify",
+            json={
+                "user_id":   user_id,
+                "type":      "order_created",
+                "channel":   "email",
+                "recipient": recipient,
+                "subject":   f"Order #{order_id} Created",
+                "message":   f"Your order #{order_id} has been placed. Total: ${total:.2f}",
+            },
+            timeout=5
+        )
+    except requests.RequestException:
+        pass  # Don't fail order creation if notification fails
 
-    return jsonify(dict(user)), 200
+    return jsonify({"order_id": order_id, "status": "pending", "total": total}), 201
+
+
+@app.get("/orders")
+@app.get("/orders/")
+def list_orders():
+    # Accept user_id from header or query param
+    user_id = request.headers.get("X-User-Id") or request.args.get("user_id", "anonymous")
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM orders WHERE user_id = ?", (user_id,)
+    ).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows]), 200
+
+
+@app.get("/orders/<int:order_id>")
+def get_order(order_id: int):
+    conn  = get_db()
+    order = conn.execute(
+        "SELECT * FROM orders WHERE id = ?", (order_id,)
+    ).fetchone()
+    if not order:
+        conn.close()
+        return jsonify({"error": "Order not found"}), 404
+    items = conn.execute(
+        "SELECT * FROM order_items WHERE order_id = ?", (order_id,)
+    ).fetchall()
+    conn.close()
+    result = dict(order)
+    result["items"] = [dict(i) for i in items]
+    return jsonify(result), 200
+
+
+@app.patch("/orders/<int:order_id>/status")
+def update_status(order_id: int):
+    data   = request.get_json(silent=True) or {}
+    status = data.get("status", "")
+    if status not in VALID_STATUSES:
+        return jsonify({"error": f"Invalid status. Must be one of: {', '.join(VALID_STATUSES)}"}), 400
+
+    conn = get_db()
+    order = conn.execute("SELECT id FROM orders WHERE id = ?", (order_id,)).fetchone()
+    if not order:
+        conn.close()
+        return jsonify({"error": "Order not found"}), 404
+
+    conn.execute("UPDATE orders SET status = ? WHERE id = ?", (status, order_id))
+    conn.commit()
+    conn.close()
+    return jsonify({"order_id": order_id, "status": status}), 200
+
+
+@app.delete("/orders/<int:order_id>")
+def cancel_order(order_id: int):
+    conn  = get_db()
+    items = conn.execute(
+        "SELECT * FROM order_items WHERE order_id = ?", (order_id,)
+    ).fetchall()
+    conn.execute("UPDATE orders SET status = 'cancelled' WHERE id = ?", (order_id,))
+    conn.commit()
+    conn.close()
+
+    for item in items:
+        try:
+            requests.post(
+                f"{INVENTORY_SERVICE_URL}/inventory/{item['product_id']}/release",
+                json={"quantity": item["quantity"]},
+                timeout=5
+            )
+        except requests.RequestException:
+            pass
+
+    return jsonify({"message": "Order cancelled"}), 200
 
 
 @app.get("/health")
 def health():
-    return jsonify({"status": "ok", "service": "user-service"}), 200
+    return jsonify({"status": "ok", "service": "order-service"}), 200
 
 
 if __name__ == "__main__":
     init_db()
-    # Bandit B201: debug=True exposes Werkzeug interactive debugger
-    app.run(host="0.0.0.0", port=8001, debug=True)
+    app.run(host="0.0.0.0", port=8003, debug=True)

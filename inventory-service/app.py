@@ -1,7 +1,7 @@
-print("Inventory Service")
 """
-SecureShop - Inventory Service (minimal)
-Handles: stock levels, reservation, release
+SecureShop - Inventory Service
+Handles: stock levels, reservation, release, deduction
+Port: 8006
 """
 
 import os
@@ -9,13 +9,9 @@ import sqlite3
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)
-# Get the directory where this script lives
-import tempfile
 
+DB_PATH = os.environ.get("DB_PATH", "inventory.db")
 
-# Use temp directory for development
-DB_PATH = os.environ.get("DB_PATH", os.path.join(tempfile.gettempdir(), "inventory.db"))
-print(f"Using database at: {DB_PATH}")
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
@@ -33,14 +29,13 @@ def init_db():
             reserved   INTEGER NOT NULL DEFAULT 0
         )
     """)
-    # Seed some stock
     conn.execute("""
         INSERT OR IGNORE INTO inventory (product_id, stock, reserved)
         VALUES
-          (1, 10, 0),
-          (2, 50, 0),
+          (1, 10,  0),
+          (2, 50,  0),
           (3, 100, 0),
-          (4, 20, 0)
+          (4, 20,  0)
     """)
     conn.commit()
     conn.close()
@@ -48,7 +43,6 @@ def init_db():
 
 @app.get("/inventory")
 def list_inventory():
-    """Return stock levels for all products."""
     conn = get_db()
     rows = conn.execute("SELECT * FROM inventory").fetchall()
     conn.close()
@@ -57,13 +51,11 @@ def list_inventory():
 
 @app.get("/inventory/<int:product_id>")
 def get_stock(product_id: int):
-    """Return stock for a single product."""
     conn = get_db()
     row = conn.execute(
         "SELECT * FROM inventory WHERE product_id = ?", (product_id,)
     ).fetchone()
     conn.close()
-
     if not row:
         return jsonify({"error": "Product not found in inventory"}), 404
     return jsonify(dict(row)), 200
@@ -71,10 +63,8 @@ def get_stock(product_id: int):
 
 @app.post("/inventory/<int:product_id>/reserve")
 def reserve_stock(product_id: int):
-    """Reserve a quantity of stock for an order."""
-    data = request.get_json(silent=True) or {}
+    data     = request.get_json(silent=True) or {}
     quantity = data.get("quantity", 0)
-
     if quantity <= 0:
         return jsonify({"error": "quantity must be greater than 0"}), 400
 
@@ -82,7 +72,6 @@ def reserve_stock(product_id: int):
     row = conn.execute(
         "SELECT * FROM inventory WHERE product_id = ?", (product_id,)
     ).fetchone()
-
     if not row:
         return jsonify({"error": "Product not found in inventory"}), 404
 
@@ -101,10 +90,8 @@ def reserve_stock(product_id: int):
 
 @app.post("/inventory/<int:product_id>/release")
 def release_stock(product_id: int):
-    """Release previously reserved stock (e.g. order cancelled)."""
-    data = request.get_json(silent=True) or {}
+    data     = request.get_json(silent=True) or {}
     quantity = data.get("quantity", 0)
-
     if quantity <= 0:
         return jsonify({"error": "quantity must be greater than 0"}), 400
 
@@ -112,7 +99,6 @@ def release_stock(product_id: int):
     row = conn.execute(
         "SELECT * FROM inventory WHERE product_id = ?", (product_id,)
     ).fetchone()
-
     if not row:
         return jsonify({"error": "Product not found in inventory"}), 404
 
@@ -128,10 +114,8 @@ def release_stock(product_id: int):
 
 @app.post("/inventory/<int:product_id>/deduct")
 def deduct_stock(product_id: int):
-    """Permanently deduct stock after a completed order."""
-    data = request.get_json(silent=True) or {}
+    data     = request.get_json(silent=True) or {}
     quantity = data.get("quantity", 0)
-
     if quantity <= 0:
         return jsonify({"error": "quantity must be greater than 0"}), 400
 
@@ -139,7 +123,6 @@ def deduct_stock(product_id: int):
     row = conn.execute(
         "SELECT * FROM inventory WHERE product_id = ?", (product_id,)
     ).fetchone()
-
     if not row:
         return jsonify({"error": "Product not found in inventory"}), 404
 
@@ -155,10 +138,8 @@ def deduct_stock(product_id: int):
 
 @app.put("/inventory/<int:product_id>")
 def set_stock(product_id: int):
-    """Set stock level for a product (admin use)."""
-    data = request.get_json(silent=True) or {}
+    data  = request.get_json(silent=True) or {}
     stock = data.get("stock")
-
     if stock is None or stock < 0:
         return jsonify({"error": "valid stock value is required"}), 400
 

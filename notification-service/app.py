@@ -1,7 +1,9 @@
 """
-SecureShop - Notification Service (minimal)
-Handles: email/SMS dispatch, stores notification log
-Note: no real email/SMS sent — logs to console and DB only
+SecureShop - Notification Service
+Handles: email/SMS dispatch (simulated), notification log
+Port: 8005
+
+No real email/SMS sent — all output goes to console + DB.
 """
 
 import os
@@ -40,21 +42,15 @@ def init_db():
 
 
 def send_email(recipient: str, subject: str, message: str):
-    """Simulate sending an email — prints to console."""
     print(f"[EMAIL] To: {recipient} | Subject: {subject} | Body: {message}")
 
 
 def send_sms(recipient: str, message: str):
-    """Simulate sending an SMS — prints to console."""
     print(f"[SMS] To: {recipient} | Message: {message}")
 
 
 @app.post("/notify")
 def notify():
-    """
-    Send a notification.
-    Body: { user_id, type, channel (email|sms), recipient, subject, message }
-    """
     data      = request.get_json(silent=True) or {}
     user_id   = data.get("user_id", "")
     ntype     = data.get("type", "general")
@@ -65,7 +61,6 @@ def notify():
 
     if not recipient or not message:
         return jsonify({"error": "recipient and message are required"}), 400
-
     if channel not in ("email", "sms"):
         return jsonify({"error": "channel must be email or sms"}), 400
 
@@ -84,36 +79,30 @@ def notify():
     notif_id = cur.lastrowid
     conn.commit()
     conn.close()
-
     return jsonify({"notification_id": notif_id, "status": "sent"}), 201
 
 
 @app.get("/notifications")
 def list_notifications():
-    """Return all notifications (for inspection/debugging)."""
     user_id = request.args.get("user_id", "")
     conn = get_db()
-
     if user_id:
         rows = conn.execute(
             "SELECT * FROM notifications WHERE user_id = ?", (user_id,)
         ).fetchall()
     else:
         rows = conn.execute("SELECT * FROM notifications").fetchall()
-
     conn.close()
     return jsonify([dict(r) for r in rows]), 200
 
 
 @app.get("/notifications/<int:notif_id>")
 def get_notification(notif_id: int):
-    """Get a single notification by ID."""
     conn = get_db()
     row = conn.execute(
         "SELECT * FROM notifications WHERE id = ?", (notif_id,)
     ).fetchone()
     conn.close()
-
     if not row:
         return jsonify({"error": "Notification not found"}), 404
     return jsonify(dict(row)), 200

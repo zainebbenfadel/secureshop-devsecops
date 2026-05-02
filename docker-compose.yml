@@ -8,7 +8,7 @@ services:
       SECRET_KEY: dev-secret-123
       DB_PATH: /app/users.db
     volumes:
-      - ./user-service/users.db:/app/users.db
+      - user_data:/app
 
   product-service:
     build: ./product-service
@@ -16,7 +16,7 @@ services:
     environment:
       DB_PATH: /app/products.db
     volumes:
-      - ./product-service/products.db:/app/products.db
+      - product_data:/app
 
   order-service:
     build: ./order-service
@@ -24,7 +24,7 @@ services:
     environment:
       DB_PATH: /app/orders.db
     volumes:
-      - ./order-service/orders.db:/app/orders.db
+      - order_data:/app
 
   payment-service:
     build: ./payment-service
@@ -32,7 +32,7 @@ services:
     environment:
       DB_PATH: /app/payments.db
     volumes:
-      - ./payment-service/payments.db:/app/payments.db
+      - payment_data:/app
 
   notification-service:
     build: ./notification-service
@@ -40,7 +40,7 @@ services:
     environment:
       DB_PATH: /app/notifications.db
     volumes:
-      - ./notification-service/notifications.db:/app/notifications.db
+      - notification_data:/app
 
   inventory-service:
     build: ./inventory-service
@@ -48,7 +48,7 @@ services:
     environment:
       DB_PATH: /app/inventory.db
     volumes:
-      - ./inventory-service/inventory.db:/app/inventory.db
+      - inventory_data:/app
 
   gateway:
     image: nginx:alpine
@@ -56,7 +56,7 @@ services:
     ports:
       - "80:80"
     volumes:
-      - ./gateway/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./api-gateway/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       - user-service
       - product-service
@@ -64,3 +64,22 @@ services:
       - payment-service
       - notification-service
       - inventory-service
+
+  # ✅ This is the CORRECT way to add dependency-check as an OPTIONAL service
+  dependency-check:
+    image: owasp/dependency-check:latest
+    container_name: dependency-check
+    volumes:
+      - ./:/src
+      - ./reports:/report
+    command: --scan /src --format HTML --out /report --project "SecureShop"
+    profiles:
+      - scan  # This prevents it from starting with 'docker-compose up'
+
+volumes:
+  user_data:
+  product_data:
+  order_data:
+  payment_data:
+  notification_data:
+  inventory_data:

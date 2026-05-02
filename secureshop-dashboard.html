@@ -1,0 +1,1028 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SecureShop DevSecOps Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0f0f13;
+  --surface: #16161d;
+  --surface2: #1e1e28;
+  --surface3: #252532;
+  --border: rgba(255,255,255,0.07);
+  --border2: rgba(255,255,255,0.12);
+  --text: #f0f0f5;
+  --text2: #9090a8;
+  --text3: #5a5a72;
+  --accent: #7c6af7;
+  --accent-dim: rgba(124,106,247,0.15);
+  --accent-border: rgba(124,106,247,0.35);
+  --green: #3ecf8e;
+  --green-dim: rgba(62,207,142,0.12);
+  --red: #f66;
+  --red-dim: rgba(255,102,102,0.12);
+  --amber: #f5a623;
+  --amber-dim: rgba(245,166,35,0.12);
+  --blue: #4ca3ff;
+  --blue-dim: rgba(76,163,255,0.12);
+  --radius: 10px;
+  --radius-sm: 6px;
+  --radius-lg: 14px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ── TOPBAR ── */
+.topbar {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(15,15,19,0.85);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 28px;
+  height: 56px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.logo { display: flex; align-items: center; gap: 10px; }
+.logo-mark {
+  width: 32px; height: 32px; border-radius: 8px;
+  background: linear-gradient(135deg, var(--accent), #a78bfa);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; font-weight: 700; color: #fff; letter-spacing: -1px;
+}
+.logo-text { font-size: 15px; font-weight: 600; letter-spacing: -0.3px; }
+.logo-sub { font-size: 11px; color: var(--text3); margin-top: 1px; }
+.health-bar { display: flex; align-items: center; gap: 8px; }
+.health-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--text3); transition: background .3s;
+  position: relative;
+}
+.health-dot.up { background: var(--green); box-shadow: 0 0 8px var(--green); }
+.health-dot.down { background: var(--red); }
+.health-dot-label { font-size: 11px; color: var(--text3); }
+.health-group { display: flex; align-items: center; gap: 5px; }
+.check-btn {
+  padding: 6px 14px; border-radius: var(--radius-sm);
+  background: var(--surface3); border: 1px solid var(--border2);
+  color: var(--text2); font-size: 12px; cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  transition: all .15s;
+}
+.check-btn:hover { background: var(--surface2); color: var(--text); border-color: var(--border2); }
+
+/* ── LAYOUT ── */
+.layout { display: flex; height: calc(100vh - 56px); }
+
+/* ── SIDEBAR ── */
+.sidebar {
+  width: 210px; flex-shrink: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: 20px 0;
+  overflow-y: auto;
+}
+.sidebar-section { padding: 16px 18px 6px; font-size: 10px; font-weight: 600; letter-spacing: 1.2px; color: var(--text3); text-transform: uppercase; }
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 18px; cursor: pointer; color: var(--text2);
+  font-size: 13px; font-weight: 400;
+  border-left: 2px solid transparent;
+  transition: all .15s; position: relative;
+}
+.nav-item:hover { background: var(--surface2); color: var(--text); }
+.nav-item.active { background: var(--accent-dim); color: var(--text); border-left-color: var(--accent); font-weight: 500; }
+.nav-icon { font-size: 16px; width: 20px; text-align: center; }
+.nav-badge {
+  margin-left: auto; background: var(--accent); color: #fff;
+  font-size: 10px; font-weight: 600; padding: 1px 6px;
+  border-radius: 20px; display: none;
+}
+.nav-badge.show { display: block; }
+
+/* ── CONTENT ── */
+.content { flex: 1; overflow-y: auto; padding: 28px; background: var(--bg); }
+.panel { display: none; animation: fadeIn .2s ease; }
+.panel.active { display: block; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+.page-header { margin-bottom: 24px; }
+.page-title { font-size: 22px; font-weight: 600; letter-spacing: -0.5px; }
+.page-desc { font-size: 13px; color: var(--text2); margin-top: 4px; }
+
+/* ── CARDS ── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px 22px;
+  margin-bottom: 16px;
+}
+.card-header {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 16px; padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+.card-icon {
+  width: 32px; height: 32px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; flex-shrink: 0;
+}
+.card-icon.purple { background: var(--accent-dim); }
+.card-icon.green { background: var(--green-dim); }
+.card-icon.blue { background: var(--blue-dim); }
+.card-icon.amber { background: var(--amber-dim); }
+.card-icon.red { background: var(--red-dim); }
+.card-title { font-size: 13px; font-weight: 600; color: var(--text); }
+.card-subtitle { font-size: 12px; color: var(--text3); margin-top: 1px; }
+
+/* ── FORM ELEMENTS ── */
+.form-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; align-items: flex-end; }
+.field { flex: 1; min-width: 130px; }
+.field label { display: block; font-size: 11px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 6px; }
+input, select, textarea {
+  width: 100%; padding: 9px 12px;
+  background: var(--surface2); border: 1px solid var(--border2);
+  border-radius: var(--radius-sm); color: var(--text); font-size: 13px;
+  font-family: 'DM Sans', sans-serif;
+  transition: border-color .15s, box-shadow .15s;
+  outline: none;
+}
+input:focus, select:focus, textarea:focus {
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+select { cursor: pointer; }
+input::placeholder { color: var(--text3); }
+
+/* ── BUTTONS ── */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 9px 18px; border-radius: var(--radius-sm);
+  font-size: 13px; font-weight: 500; cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  transition: all .15s; border: 1px solid var(--border2);
+  background: var(--surface2); color: var(--text2);
+  white-space: nowrap;
+}
+.btn:hover { background: var(--surface3); color: var(--text); }
+.btn:active { transform: scale(0.97); }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-primary:hover { background: #8f7ef8; color: #fff; }
+.btn-success { background: var(--green-dim); border-color: rgba(62,207,142,0.3); color: var(--green); }
+.btn-success:hover { background: rgba(62,207,142,0.2); }
+.btn-danger { background: var(--red-dim); border-color: rgba(255,102,102,0.3); color: var(--red); }
+.btn-danger:hover { background: rgba(255,102,102,0.2); }
+.btn-sm { padding: 5px 12px; font-size: 12px; }
+.btn-group { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+/* ── RESPONSE BOX ── */
+.response {
+  margin-top: 14px;
+  background: #0a0a0f;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 260px;
+  overflow-y: auto;
+  color: #a0a0c0;
+  display: none;
+  line-height: 1.7;
+}
+.response.error { border-color: rgba(255,102,102,0.3); color: var(--red); }
+.response.success { border-color: rgba(62,207,142,0.3); }
+
+/* ── PRODUCT GRID ── */
+.product-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+  gap: 10px; margin-top: 14px;
+}
+.product-card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  cursor: pointer;
+  transition: all .15s;
+  position: relative;
+}
+.product-card:hover { border-color: var(--border2); background: var(--surface3); transform: translateY(-1px); }
+.product-card.in-cart { border-color: var(--accent-border); background: var(--accent-dim); }
+.product-emoji { font-size: 24px; margin-bottom: 8px; display: block; }
+.product-name { font-size: 13px; font-weight: 500; margin-bottom: 4px; }
+.product-price { font-size: 16px; font-weight: 600; color: var(--accent); }
+.product-meta { font-size: 11px; color: var(--text3); margin-top: 5px; display: flex; gap: 6px; flex-wrap: wrap; }
+.tag {
+  display: inline-block; padding: 2px 8px; border-radius: 20px;
+  font-size: 11px; font-weight: 500;
+  background: var(--surface3); color: var(--text2); border: 1px solid var(--border);
+}
+
+/* ── CART ── */
+.cart-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 0; border-bottom: 1px solid var(--border); gap: 10px;
+}
+.cart-item:last-child { border-bottom: none; }
+.cart-item-name { font-size: 13px; font-weight: 500; flex: 1; }
+.cart-item-price { font-size: 13px; color: var(--text2); min-width: 80px; text-align: right; }
+.qty-ctrl { display: flex; align-items: center; gap: 6px; }
+.qty-btn {
+  width: 26px; height: 26px; border-radius: 6px;
+  background: var(--surface3); border: 1px solid var(--border2);
+  color: var(--text); font-size: 14px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all .1s; font-family: 'DM Sans', sans-serif;
+}
+.qty-btn:hover { background: var(--surface2); }
+.qty-num { font-size: 13px; font-weight: 500; min-width: 20px; text-align: center; }
+.cart-total-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding-top: 14px; margin-top: 4px;
+}
+.cart-total-label { font-size: 12px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.6px; }
+.cart-total-amount { font-size: 22px; font-weight: 600; color: var(--text); }
+
+/* ── INVENTORY CARDS ── */
+.inv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-top: 14px; }
+.inv-card {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 16px;
+}
+.inv-product { font-size: 12px; color: var(--text3); margin-bottom: 6px; }
+.inv-number { font-size: 28px; font-weight: 600; color: var(--text); line-height: 1; }
+.inv-unit { font-size: 11px; color: var(--text3); margin-top: 4px; }
+.inv-bar { height: 4px; background: var(--surface3); border-radius: 2px; margin-top: 10px; }
+.inv-bar-fill { height: 100%; border-radius: 2px; background: var(--green); transition: width .4s; }
+.inv-reserved { font-size: 11px; color: var(--amber); margin-top: 6px; }
+
+/* ── STATUS BADGES ── */
+.badge {
+  display: inline-block; padding: 3px 10px; border-radius: 20px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.3px;
+}
+.badge-pending { background: var(--amber-dim); color: var(--amber); border: 1px solid rgba(245,166,35,0.25); }
+.badge-confirmed, .badge-completed, .badge-sent { background: var(--green-dim); color: var(--green); border: 1px solid rgba(62,207,142,0.25); }
+.badge-refunded, .badge-cancelled { background: var(--red-dim); color: var(--red); border: 1px solid rgba(255,102,102,0.25); }
+
+/* ── TOKEN BOX ── */
+.token-box {
+  margin-top: 12px; padding: 10px 14px;
+  background: var(--green-dim); border: 1px solid rgba(62,207,142,0.25);
+  border-radius: var(--radius-sm); display: none; align-items: center; gap: 8px;
+}
+.token-box-icon { color: var(--green); font-size: 16px; }
+.token-box-text { font-size: 12px; color: var(--green); font-family: 'DM Mono', monospace; word-break: break-all; }
+
+/* ── DIVIDER ── */
+hr { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
+
+/* ── NOTIFICATION LOG ── */
+.notif-item {
+  display: flex; gap: 12px; padding: 12px 0;
+  border-bottom: 1px solid var(--border); align-items: flex-start;
+}
+.notif-item:last-child { border-bottom: none; }
+.notif-icon { width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; background: var(--surface3); }
+.notif-body { flex: 1; }
+.notif-subject { font-size: 13px; font-weight: 500; }
+.notif-meta { font-size: 11px; color: var(--text3); margin-top: 3px; }
+.notif-message { font-size: 12px; color: var(--text2); margin-top: 4px; }
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--surface3); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border2); }
+
+/* ── EMPTY STATE ── */
+.empty { text-align: center; padding: 40px 20px; color: var(--text3); }
+.empty-icon { font-size: 32px; margin-bottom: 10px; }
+.empty-text { font-size: 13px; }
+
+/* ── TOAST ── */
+.toast {
+  position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+  background: var(--surface); border: 1px solid var(--border2);
+  border-radius: var(--radius); padding: 12px 18px;
+  font-size: 13px; color: var(--text);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  transform: translateY(80px); opacity: 0;
+  transition: all .25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  display: flex; align-items: center; gap: 10px;
+  max-width: 320px;
+}
+.toast.show { transform: translateY(0); opacity: 1; }
+.toast.success { border-left: 3px solid var(--green); }
+.toast.error { border-left: 3px solid var(--red); }
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<header class="topbar">
+  <div class="logo">
+    <div class="logo-mark">SS</div>
+    <div>
+      <div class="logo-text">SecureShop</div>
+      <div class="logo-sub">DevSecOps Dashboard</div>
+    </div>
+  </div>
+  <div class="health-bar" id="health-bar">
+    <button class="check-btn" onclick="checkAll()">&#x25cf; Check services</button>
+    <div class="health-group" title="user-service"><div class="health-dot" id="dot-users"></div><span class="health-dot-label">Users</span></div>
+    <div class="health-group" title="product-service"><div class="health-dot" id="dot-products"></div><span class="health-dot-label">Products</span></div>
+    <div class="health-group" title="order-service"><div class="health-dot" id="dot-orders"></div><span class="health-dot-label">Orders</span></div>
+    <div class="health-group" title="payment-service"><div class="health-dot" id="dot-payments"></div><span class="health-dot-label">Payments</span></div>
+    <div class="health-group" title="inventory-service"><div class="health-dot" id="dot-inventory"></div><span class="health-dot-label">Inventory</span></div>
+    <div class="health-group" title="notification-service"><div class="health-dot" id="dot-notifications"></div><span class="health-dot-label">Notify</span></div>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- SIDEBAR -->
+  <nav class="sidebar">
+    <div class="sidebar-section">Services</div>
+    <div class="nav-item active" onclick="switchTab('users')"><span class="nav-icon">👤</span> Users</div>
+    <div class="nav-item" onclick="switchTab('products')"><span class="nav-icon">📦</span> Products</div>
+    <div class="nav-item" onclick="switchTab('orders')">
+      <span class="nav-icon">🛒</span> Orders
+      <span class="nav-badge" id="cart-badge">0</span>
+    </div>
+    <div class="nav-item" onclick="switchTab('payments')"><span class="nav-icon">💳</span> Payments</div>
+    <div class="nav-item" onclick="switchTab('inventory')"><span class="nav-icon">🏭</span> Inventory</div>
+    <div class="nav-item" onclick="switchTab('notifications')"><span class="nav-icon">🔔</span> Notifications</div>
+  </nav>
+
+  <!-- MAIN CONTENT -->
+  <main class="content">
+
+    <!-- ── USERS ── -->
+    <div class="panel active" id="panel-users">
+      <div class="page-header">
+        <div class="page-title">User Service</div>
+        <div class="page-desc">Register accounts, login, and manage JWT authentication · Port 8001</div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon purple">✍️</div>
+          <div><div class="card-title">Register new user</div><div class="card-subtitle">Creates a user in SQLite via the user-service</div></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Full name</label><input id="u-name" type="text" placeholder="Alice Smith" value="Alice Smith"></div>
+          <div class="field"><label>Email</label><input id="u-email" type="email" placeholder="alice@example.com" value="alice@example.com"></div>
+          <div class="field"><label>Password</label><input id="u-pass" type="text" placeholder="pass123" value="pass123"></div>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-primary" onclick="doRegister()">Register user</button>
+        </div>
+        <div id="res-register" class="response"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon green">🔑</div>
+          <div><div class="card-title">Login</div><div class="card-subtitle">Receives a JWT token saved for subsequent requests</div></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Email</label><input id="l-email" type="email" value="alice@example.com"></div>
+          <div class="field"><label>Password</label><input id="l-pass" type="text" value="pass123"></div>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-primary" onclick="doLogin()">Login &amp; save token</button>
+        </div>
+        <div id="res-login" class="response"></div>
+        <div class="token-box" id="token-display">
+          <span class="token-box-icon">✓</span>
+          <span class="token-box-text" id="token-text"></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon blue">👁️</div>
+          <div><div class="card-title">Get profile</div><div class="card-subtitle">Requires a valid JWT token from login above</div></div>
+        </div>
+        <div class="btn-group">
+          <button class="btn" onclick="doProfile()">Fetch my profile</button>
+        </div>
+        <div id="res-profile" class="response"></div>
+      </div>
+    </div>
+
+    <!-- ── PRODUCTS ── -->
+    <div class="panel" id="panel-products">
+      <div class="page-header">
+        <div class="page-title">Product Service</div>
+        <div class="page-desc">Browse catalogue, search, and manage products · Port 8002</div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon blue">🔍</div>
+          <div><div class="card-title">Browse &amp; search products</div><div class="card-subtitle">Click a product card to add it to your cart</div></div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label>Category filter</label>
+            <select id="p-cat">
+              <option value="">All categories</option>
+              <option>electronics</option>
+              <option>clothing</option>
+              <option>kitchen</option>
+            </select>
+          </div>
+          <div class="field"><label>Search keyword</label><input id="p-search" placeholder="e.g. laptop"></div>
+          <button class="btn btn-primary" onclick="loadProducts()">Load products</button>
+          <button class="btn" onclick="doSearch()">Search</button>
+        </div>
+        <div id="product-grid" class="product-grid">
+          <div class="empty"><div class="empty-icon">📦</div><div class="empty-text">Click "Load products" to see the catalogue</div></div>
+        </div>
+        <div id="res-products" class="response"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon green">➕</div>
+          <div><div class="card-title">Add new product</div><div class="card-subtitle">Inserts a new product into the product-service database</div></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Name</label><input id="np-name" placeholder="Widget Pro"></div>
+          <div class="field"><label>Price ($)</label><input id="np-price" type="number" value="29.99" step="0.01"></div>
+          <div class="field"><label>Stock</label><input id="np-stock" type="number" value="10"></div>
+          <div class="field"><label>Category</label><input id="np-cat" placeholder="electronics"></div>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-primary" onclick="addProduct()">Add product</button>
+        </div>
+        <div id="res-addproduct" class="response"></div>
+      </div>
+    </div>
+
+    <!-- ── ORDERS ── -->
+    <div class="panel" id="panel-orders">
+      <div class="page-header">
+        <div class="page-title">Order Service</div>
+        <div class="page-desc">Manage cart, place orders, and track order lifecycle · Port 8003</div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon amber">🛒</div>
+          <div><div class="card-title">Shopping cart</div><div class="card-subtitle">Load products, click to add · order-service calls inventory + notification automatically</div></div>
+        </div>
+        <div class="btn-group" style="margin-bottom:14px">
+          <button class="btn" onclick="loadProductsForCart()">Load products</button>
+        </div>
+        <div id="cart-product-grid" class="product-grid" style="margin-bottom:16px"></div>
+        <div id="cart-items"></div>
+        <div class="cart-total-row">
+          <div>
+            <div class="cart-total-label">Order total</div>
+            <div class="cart-total-amount" id="cart-total">$0.00</div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:flex-end">
+            <div class="field" style="min-width:unset">
+              <label>User ID</label>
+              <input id="o-userid" value="1" style="width:70px">
+            </div>
+            <button class="btn btn-primary" onclick="placeOrder()">Place order →</button>
+          </div>
+        </div>
+        <div id="res-order" class="response"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon blue">📋</div>
+          <div><div class="card-title">My orders</div><div class="card-subtitle">Fetch all orders for a user or look up a specific order</div></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>User ID</label><input id="lo-userid" value="1" style="max-width:90px"></div>
+          <button class="btn" onclick="listOrders()">List my orders</button>
+          <div class="field"><label>Or get by Order ID</label><input id="lo-id" type="number" placeholder="1" style="max-width:90px"></div>
+          <button class="btn" onclick="getOrder()">Get order</button>
+        </div>
+        <div id="res-orders" class="response"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon purple">✏️</div>
+          <div><div class="card-title">Update order status</div><div class="card-subtitle">Move an order through its lifecycle</div></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Order ID</label><input id="us-orderid" type="number" value="1" style="max-width:90px"></div>
+          <div class="field">
+            <label>New status</label>
+            <select id="us-status">
+              <option>confirmed</option><option>shipped</option><option>delivered</option><option>cancelled</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" onclick="updateOrderStatus()">Update status</button>
+        </div>
+        <div id="res-ustatus" class="response"></div>
+      </div>
+    </div>
+
+    <!-- ── PAYMENTS ── -->
+    <div class="panel" id="panel-payments">
+      <div class="page-header">
+        <div class="page-title">Payment Service</div>
+        <div class="page-desc">Initiate, confirm, and refund transactions · Port 8004</div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon green">💳</div>
+          <div><div class="card-title">Initiate payment</div><div class="card-subtitle">Creates a pending transaction for an order</div></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Order ID</label><input id="pay-orderid" type="number" value="1"></div>
+          <div class="field"><label>Amount ($)</label><input id="pay-amount" type="number" value="999.99" step="0.01"></div>
+          <div class="field"><label>Method</label><select id="pay-method"><option>card</option><option>paypal</option><option>bank</option></select></div>
+          <div class="field"><label>User ID</label><input id="pay-userid" value="1" style="max-width:80px"></div>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-primary" onclick="initiatePayment()">Initiate payment</button>
+        </div>
+        <div id="res-pay" class="response"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon amber">⚡</div>
+          <div><div class="card-title">Confirm or refund</div><div class="card-subtitle">Confirm triggers inventory deduction + order update + receipt notification</div></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Transaction ID</label><input id="txn-id" type="number" value="1"></div>
+          <button class="btn btn-success" onclick="confirmPayment()">✓ Confirm payment</button>
+          <button class="btn btn-danger" onclick="refundPayment()">↩ Refund</button>
+        </div>
+        <div id="res-confirm" class="response"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon blue">📜</div>
+          <div><div class="card-title">Payment history</div><div class="card-subtitle">View all transactions for a user</div></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>User ID</label><input id="lp-userid" value="1" style="max-width:90px"></div>
+          <button class="btn" onclick="listPayments()">Load payments</button>
+        </div>
+        <div id="res-payments" class="response"></div>
+      </div>
+    </div>
+
+    <!-- ── INVENTORY ── -->
+    <div class="panel" id="panel-inventory">
+      <div class="page-header">
+        <div class="page-title">Inventory Service</div>
+        <div class="page-desc">Real-time stock levels, reservations, and deductions · Port 8006</div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon green">📊</div>
+          <div><div class="card-title">Live stock levels</div><div class="card-subtitle">Shows available vs reserved stock per product</div></div>
+        </div>
+        <button class="btn btn-primary" onclick="loadInventory()">Refresh inventory</button>
+        <div id="inventory-display"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon amber">⚙️</div>
+          <div><div class="card-title">Reserve / Release / Deduct stock</div><div class="card-subtitle">Manually trigger stock operations</div></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Product ID</label><input id="inv-pid" type="number" value="1" style="max-width:90px"></div>
+          <div class="field"><label>Quantity</label><input id="inv-qty" type="number" value="1" style="max-width:90px"></div>
+          <button class="btn" onclick="reserveStock()">Reserve</button>
+          <button class="btn btn-success" onclick="releaseStock()">Release</button>
+          <button class="btn btn-danger" onclick="deductStock()">Deduct</button>
+        </div>
+        <div id="res-inv" class="response"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon purple">🔧</div>
+          <div><div class="card-title">Set stock level</div><div class="card-subtitle">Admin override for stock quantity</div></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Product ID</label><input id="set-pid" type="number" value="1" style="max-width:90px"></div>
+          <div class="field"><label>New stock level</label><input id="set-stock" type="number" value="100" style="max-width:90px"></div>
+          <button class="btn btn-primary" onclick="setStock()">Set stock</button>
+        </div>
+        <div id="res-setstock" class="response"></div>
+      </div>
+    </div>
+
+    <!-- ── NOTIFICATIONS ── -->
+    <div class="panel" id="panel-notifications">
+      <div class="page-header">
+        <div class="page-title">Notification Service</div>
+        <div class="page-desc">Email / SMS dispatch log (simulated — check Docker logs for output) · Port 8005</div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon purple">📨</div>
+          <div><div class="card-title">Send a notification</div><div class="card-subtitle">Manually dispatch an email or SMS to any recipient</div></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Recipient</label><input id="n-recipient" value="alice@example.com"></div>
+          <div class="field"><label>Channel</label><select id="n-channel"><option>email</option><option>sms</option></select></div>
+          <div class="field"><label>User ID</label><input id="n-userid" value="1" style="max-width:80px"></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Subject</label><input id="n-subject" value="Test notification"></div>
+          <div class="field" style="flex:2"><label>Message</label><input id="n-message" value="Hello from SecureShop!"></div>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-primary" onclick="sendNotification()">Send notification</button>
+        </div>
+        <div id="res-notify" class="response"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon blue">📋</div>
+          <div><div class="card-title">Notification log</div><div class="card-subtitle">All notifications sent (including automatic ones from orders &amp; payments)</div></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Filter by User ID (optional)</label><input id="ln-userid" placeholder="leave blank for all" style="max-width:200px"></div>
+          <button class="btn" onclick="listNotifications()">Load log</button>
+        </div>
+        <div id="notif-list"></div>
+        <div id="res-notifications" class="response"></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+const BASE = 'http://localhost';
+let token = null;
+let cart = [];
+let allProducts = [];
+
+const CATEGORY_EMOJI = { electronics: '💻', clothing: '👕', kitchen: '☕', general: '📦' };
+
+function switchTab(name) {
+  document.querySelectorAll('.nav-item').forEach((el, i) => {
+    const tabs = ['users','products','orders','payments','inventory','notifications'];
+    el.classList.toggle('active', tabs[i] === name);
+  });
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+}
+
+function toast(msg, type = 'success') {
+  const t = document.getElementById('toast');
+  t.textContent = (type === 'success' ? '✓ ' : '✗ ') + msg;
+  t.className = 'toast show ' + type;
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function show(id, data, isErr) {
+  const el = document.getElementById(id);
+  el.style.display = 'block';
+  el.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+  el.className = 'response ' + (isErr ? 'error' : 'success');
+  if (!isErr) toast('Response received');
+  else toast(data.error || 'Request failed', 'error');
+}
+
+async function api(method, path, body, userId) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  if (userId) headers['X-User-Id'] = String(userId);
+  try {
+    const r = await fetch(BASE + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+    const json = await r.json();
+    return { ok: r.ok, status: r.status, data: json };
+  } catch(e) {
+    return { ok: false, status: 0, data: { error: 'Cannot reach gateway. Is docker-compose up? ' + e.message } };
+  }
+}
+
+async function checkAll() {
+  const services = ['users','products','orders','payments','inventory','notifications'];
+  const paths = ['/api/users/health','/api/products/health','/api/orders/health','/api/payments/health','/api/inventory/health','/api/notifications/health'];
+  const results = await Promise.all(paths.map(p => api('GET', p)));
+  results.forEach((r, i) => {
+    const dot = document.getElementById('dot-' + services[i]);
+    if (dot) { dot.classList.toggle('up', r.ok); dot.classList.toggle('down', !r.ok); }
+  });
+  const upCount = results.filter(r => r.ok).length;
+  toast(`${upCount}/${services.length} services reachable`, upCount === services.length ? 'success' : 'error');
+}
+
+async function doRegister() {
+  const r = await api('POST', '/api/users/register', {
+    full_name: document.getElementById('u-name').value,
+    email: document.getElementById('u-email').value,
+    password: document.getElementById('u-pass').value
+  });
+  show('res-register', r.data, !r.ok);
+}
+
+async function doLogin() {
+  const r = await api('POST', '/api/users/login', {
+    email: document.getElementById('l-email').value,
+    password: document.getElementById('l-pass').value
+  });
+  show('res-login', r.data, !r.ok);
+  if (r.ok && r.data.access_token) {
+    token = r.data.access_token;
+    const td = document.getElementById('token-display');
+    td.style.display = 'flex';
+    document.getElementById('token-text').textContent = 'Token saved: ' + token.substring(0, 50) + '...';
+    toast('Logged in — JWT token saved');
+  }
+}
+
+async function doProfile() {
+  const r = await api('GET', '/api/users/profile');
+  show('res-profile', r.data, !r.ok);
+}
+
+function renderProducts(gridId, products, clickable) {
+  const grid = document.getElementById(gridId);
+  if (!products || !products.length) {
+    grid.innerHTML = '<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">No products found</div></div>';
+    return;
+  }
+  grid.innerHTML = '';
+  products.forEach(p => {
+    const emoji = CATEGORY_EMOJI[p.category] || '📦';
+    const inCart = cart.find(i => i.product_id === p.id);
+    const d = document.createElement('div');
+    d.className = 'product-card' + (inCart ? ' in-cart' : '');
+    d.innerHTML = `
+      <span class="product-emoji">${emoji}</span>
+      <div class="product-name">${p.name}</div>
+      <div class="product-price">$${p.price.toFixed(2)}</div>
+      <div class="product-meta">
+        <span class="tag">${p.category}</span>
+        <span style="color:var(--text3);font-size:11px">${p.stock} in stock</span>
+        ${inCart ? '<span style="color:var(--accent);font-size:11px">✓ in cart ('+inCart.quantity+')</span>' : ''}
+      </div>`;
+    if (clickable) d.onclick = () => { addToCart(p); renderProducts(gridId, allProducts, true); };
+    grid.appendChild(d);
+  });
+}
+
+async function loadProducts() {
+  const cat = document.getElementById('p-cat').value;
+  const path = cat ? `/api/products/products?category=${cat}` : '/api/products/products';
+  const r = await api('GET', path);
+  if (r.ok) { allProducts = r.data; renderProducts('product-grid', r.data, false); }
+  else show('res-products', r.data, true);
+}
+
+async function doSearch() {
+  const q = document.getElementById('p-search').value.trim();
+  if (!q) return;
+  const r = await api('GET', `/api/products/products/search?q=${encodeURIComponent(q)}`);
+  if (r.ok) renderProducts('product-grid', r.data, false);
+  else show('res-products', r.data, true);
+}
+
+async function addProduct() {
+  const r = await api('POST', '/api/products/products', {
+    name: document.getElementById('np-name').value,
+    price: parseFloat(document.getElementById('np-price').value),
+    stock: parseInt(document.getElementById('np-stock').value),
+    category: document.getElementById('np-cat').value || 'general',
+    description: ''
+  });
+  show('res-addproduct', r.data, !r.ok);
+}
+
+async function loadProductsForCart() {
+  const r = await api('GET', '/api/products/products');
+  if (r.ok) { allProducts = r.data; renderProducts('cart-product-grid', r.data, true); }
+}
+
+function addToCart(product) {
+  const existing = cart.find(i => i.product_id === product.id);
+  if (existing) existing.quantity++;
+  else cart.push({ product_id: product.id, name: product.name, price: product.price, quantity: 1 });
+  renderCart();
+  updateCartBadge();
+  toast(product.name + ' added to cart');
+}
+
+function renderCart() {
+  const el = document.getElementById('cart-items');
+  if (!cart.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-icon">🛒</div><div class="empty-text">Cart is empty — load products above and click to add</div></div>';
+    document.getElementById('cart-total').textContent = '$0.00';
+    return;
+  }
+  let total = 0;
+  el.innerHTML = '';
+  cart.forEach((item, idx) => {
+    total += item.price * item.quantity;
+    const d = document.createElement('div');
+    d.className = 'cart-item';
+    d.innerHTML = `
+      <div class="cart-item-name">${item.name}</div>
+      <div class="qty-ctrl">
+        <button class="qty-btn" onclick="changeQty(${idx},-1)">−</button>
+        <span class="qty-num">${item.quantity}</span>
+        <button class="qty-btn" onclick="changeQty(${idx},1)">+</button>
+      </div>
+      <div class="cart-item-price">$${(item.price * item.quantity).toFixed(2)}</div>`;
+    el.appendChild(d);
+  });
+  document.getElementById('cart-total').textContent = '$' + total.toFixed(2);
+}
+
+function changeQty(idx, delta) {
+  cart[idx].quantity += delta;
+  if (cart[idx].quantity <= 0) cart.splice(idx, 1);
+  renderCart();
+  updateCartBadge();
+  if (allProducts.length) renderProducts('cart-product-grid', allProducts, true);
+}
+
+function updateCartBadge() {
+  const count = cart.reduce((a, b) => a + b.quantity, 0);
+  const badge = document.getElementById('cart-badge');
+  badge.textContent = count;
+  badge.classList.toggle('show', count > 0);
+}
+
+async function placeOrder() {
+  if (!cart.length) { toast('Cart is empty', 'error'); return; }
+  const userId = document.getElementById('o-userid').value;
+  const r = await api('POST', '/api/orders/orders', {
+    items: cart.map(i => ({ product_id: i.product_id, quantity: i.quantity, price: i.price })),
+    email: userId + '@example.com'
+  }, userId);
+  show('res-order', r.data, !r.ok);
+  if (r.ok) { cart = []; renderCart(); updateCartBadge(); toast('Order placed! Check Payments tab to pay'); }
+}
+
+async function listOrders() {
+  const userId = document.getElementById('lo-userid').value;
+  const r = await api('GET', '/api/orders/orders', null, userId);
+  show('res-orders', r.data, !r.ok);
+}
+
+async function getOrder() {
+  const id = document.getElementById('lo-id').value;
+  const r = await api('GET', `/api/orders/orders/${id}`);
+  show('res-orders', r.data, !r.ok);
+}
+
+async function updateOrderStatus() {
+  const id = document.getElementById('us-orderid').value;
+  const status = document.getElementById('us-status').value;
+  const r = await api('PATCH', `/api/orders/orders/${id}/status`, { status });
+  show('res-ustatus', r.data, !r.ok);
+}
+
+async function initiatePayment() {
+  const userId = document.getElementById('pay-userid').value;
+  const r = await api('POST', '/api/payments/payments', {
+    order_id: parseInt(document.getElementById('pay-orderid').value),
+    amount: parseFloat(document.getElementById('pay-amount').value),
+    method: document.getElementById('pay-method').value
+  }, userId);
+  show('res-pay', r.data, !r.ok);
+  if (r.ok) toast('Payment initiated — now click Confirm');
+}
+
+async function confirmPayment() {
+  const id = document.getElementById('txn-id').value;
+  const r = await api('POST', `/api/payments/payments/${id}/confirm`);
+  show('res-confirm', r.data, !r.ok);
+  if (r.ok) toast('Payment confirmed! Inventory deducted + notification sent');
+}
+
+async function refundPayment() {
+  const id = document.getElementById('txn-id').value;
+  const r = await api('POST', `/api/payments/payments/${id}/refund`);
+  show('res-confirm', r.data, !r.ok);
+}
+
+async function listPayments() {
+  const userId = document.getElementById('lp-userid').value;
+  const r = await api('GET', '/api/payments/payments', null, userId);
+  show('res-payments', r.data, !r.ok);
+}
+
+async function loadInventory() {
+  const r = await api('GET', '/api/inventory/inventory');
+  const el = document.getElementById('inventory-display');
+  if (r.ok && Array.isArray(r.data)) {
+    el.innerHTML = '<div class="inv-grid">' + r.data.map(i => {
+      const available = i.stock - i.reserved;
+      const pct = i.stock > 0 ? Math.round((available / i.stock) * 100) : 0;
+      const barColor = pct > 50 ? 'var(--green)' : pct > 20 ? 'var(--amber)' : 'var(--red)';
+      const emoji = ['💻','👕','☕','🎧'][i.product_id - 1] || '📦';
+      return `<div class="inv-card">
+        <div class="inv-product">${emoji} Product #${i.product_id}</div>
+        <div class="inv-number">${available}</div>
+        <div class="inv-unit">units available</div>
+        <div class="inv-bar"><div class="inv-bar-fill" style="width:${pct}%;background:${barColor}"></div></div>
+        ${i.reserved > 0 ? `<div class="inv-reserved">⏳ ${i.reserved} reserved</div>` : ''}
+      </div>`;
+    }).join('') + '</div>';
+  } else show('res-setstock', r.data, true);
+}
+
+async function reserveStock() {
+  const pid = document.getElementById('inv-pid').value;
+  const qty = parseInt(document.getElementById('inv-qty').value);
+  const r = await api('POST', `/api/inventory/inventory/${pid}/reserve`, { quantity: qty });
+  show('res-inv', r.data, !r.ok);
+  if (r.ok) loadInventory();
+}
+
+async function releaseStock() {
+  const pid = document.getElementById('inv-pid').value;
+  const qty = parseInt(document.getElementById('inv-qty').value);
+  const r = await api('POST', `/api/inventory/inventory/${pid}/release`, { quantity: qty });
+  show('res-inv', r.data, !r.ok);
+  if (r.ok) loadInventory();
+}
+
+async function deductStock() {
+  const pid = document.getElementById('inv-pid').value;
+  const qty = parseInt(document.getElementById('inv-qty').value);
+  const r = await api('POST', `/api/inventory/inventory/${pid}/deduct`, { quantity: qty });
+  show('res-inv', r.data, !r.ok);
+  if (r.ok) loadInventory();
+}
+
+async function setStock() {
+  const pid = document.getElementById('set-pid').value;
+  const stock = parseInt(document.getElementById('set-stock').value);
+  const r = await api('PUT', `/api/inventory/inventory/${pid}`, { stock });
+  show('res-setstock', r.data, !r.ok);
+  if (r.ok) loadInventory();
+}
+
+async function sendNotification() {
+  const r = await api('POST', '/api/notifications/notify', {
+    user_id: document.getElementById('n-userid').value,
+    type: 'manual',
+    channel: document.getElementById('n-channel').value,
+    recipient: document.getElementById('n-recipient').value,
+    subject: document.getElementById('n-subject').value,
+    message: document.getElementById('n-message').value
+  });
+  show('res-notify', r.data, !r.ok);
+}
+
+async function listNotifications() {
+  const uid = document.getElementById('ln-userid').value;
+  const path = uid ? `/api/notifications/notifications?user_id=${uid}` : '/api/notifications/notifications';
+  const r = await api('GET', path);
+  const el = document.getElementById('notif-list');
+  if (r.ok && Array.isArray(r.data) && r.data.length) {
+    el.innerHTML = r.data.reverse().map(n => `
+      <div class="notif-item">
+        <div class="notif-icon">${n.channel === 'email' ? '📧' : '📱'}</div>
+        <div class="notif-body">
+          <div class="notif-subject">${n.subject || 'No subject'} <span class="badge badge-sent">sent</span></div>
+          <div class="notif-meta">To: ${n.recipient} · ${n.channel} · user ${n.user_id} · ${n.created_at.split('T')[0]}</div>
+          <div class="notif-message">${n.message}</div>
+        </div>
+      </div>`).join('');
+  } else if (r.ok && (!r.data || !r.data.length)) {
+    el.innerHTML = '<div class="empty"><div class="empty-icon">🔔</div><div class="empty-text">No notifications yet — place an order first</div></div>';
+  } else show('res-notifications', r.data, true);
+}
+
+renderCart();
+checkAll();
+</script>
+</body>
+</html>

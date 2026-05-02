@@ -1,17 +1,24 @@
-print("Order Service")
 """
-SecureShop - Order Service (minimal)
+SecureShop - Order Service
 Handles: cart management, order lifecycle
+Port: 8003
+
+Inter-service calls:
+  - Calls inventory-service to reserve stock on order creation
+  - Calls notification-service to send order confirmation
 """
 
 import os
 import sqlite3
 import datetime
+import requests
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-DB_PATH = os.environ.get("DB_PATH", "orders.db")
+DB_PATH               = os.environ.get("DB_PATH", "orders.db")
+INVENTORY_SERVICE_URL = os.environ.get("INVENTORY_SERVICE_URL", "http://inventory-service:8006")
+NOTIFICATION_SERVICE_URL = os.environ.get("NOTIFICATION_SERVICE_URL", "http://notification-service:8005")
 
 
 def get_db():
@@ -50,14 +57,38 @@ def get_user_id():
 
 @app.post("/orders")
 def create_order():
-    data = request.get_json(silent=True) or {}
+    data    = request.get_json(silent=True) or {}
     user_id = get_user_id()
-    items = data.get("items", [])
+    items   = data.get("items", [])
 
     if not items:
         return jsonify({"error": "items are required"}), 400
 
-    total = sum(i.get("price", 0) * i.get("quantity", 1) for i in items)
+    # Reserve stock for each item via inventory-service
+    reserved = []
+    for item in items:
+        pid = item.get("product_id", 0)
+        qty = item.get("quantity", 1)
+        try:
+            resp = requests.post(
+                f"{INVENTORY_SERVICE_URL}/inventory/{pid}/reserve",
+                json={"quantity": qty},
+                timeout=5
+            )
+            if resp.status_code != 200:
+                # Release already-reserved items on failure
+                for r in reserved:
+                    requests.post(
+                        f"{INVENTORY_SERVICE_URL}/inventory/{r['product_id']}/release",
+                        json={"quantity": r["quantity"]},
+                        timeout=5
+                    )
+                return jsonify({"error": f"Insufficient stock for product {pid}"}), 409
+            reserved.append({"product_id": pid, "quantity": qty})
+        except requests.RequestException:
+            pass  # Inventory service unreachable — proceed (degrade gracefully)
+
+    total      = sum(i.get("price", 0) * i.get("quantity", 1) for i in items)
     created_at = datetime.datetime.utcnow().isoformat()
 
     conn = get_db()
@@ -75,6 +106,24 @@ def create_order():
 
     conn.commit()
     conn.close()
+
+    # Notify user via notification-service
+    try:
+        requests.post(
+            f"{NOTIFICATION_SERVICE_URL}/notify",
+            json={
+                "user_id":   user_id,
+                "type":      "order_created",
+                "channel":   "email",
+                "recipient": data.get("email", f"{user_id}@example.com"),
+                "subject":   f"Order #{order_id} Confirmed",
+                "message":   f"Your order #{order_id} has been placed. Total: ${total:.2f}",
+            },
+            timeout=5
+        )
+    except requests.RequestException:
+        pass  # Notification failure is non-blocking
+
     return jsonify({"order_id": order_id, "status": "pending", "total": total}), 201
 
 
@@ -95,15 +144,12 @@ def get_order(order_id: int):
     order = conn.execute(
         "SELECT * FROM orders WHERE id = ?", (order_id,)
     ).fetchone()
-
     if not order:
         return jsonify({"error": "Order not found"}), 404
-
     items = conn.execute(
         "SELECT * FROM order_items WHERE order_id = ?", (order_id,)
     ).fetchall()
     conn.close()
-
     result = dict(order)
     result["items"] = [dict(i) for i in items]
     return jsonify(result), 200
@@ -111,12 +157,10 @@ def get_order(order_id: int):
 
 @app.patch("/orders/<int:order_id>/status")
 def update_status(order_id: int):
-    data = request.get_json(silent=True) or {}
+    data   = request.get_json(silent=True) or {}
     status = data.get("status", "")
-
     if status not in ("pending", "confirmed", "shipped", "delivered", "cancelled"):
         return jsonify({"error": "Invalid status"}), 400
-
     conn = get_db()
     conn.execute(
         "UPDATE orders SET status = ? WHERE id = ?", (status, order_id)
@@ -129,11 +173,26 @@ def update_status(order_id: int):
 @app.delete("/orders/<int:order_id>")
 def cancel_order(order_id: int):
     conn = get_db()
+    # Release reserved inventory for each item
+    items = conn.execute(
+        "SELECT * FROM order_items WHERE order_id = ?", (order_id,)
+    ).fetchall()
     conn.execute(
         "UPDATE orders SET status = 'cancelled' WHERE id = ?", (order_id,)
     )
     conn.commit()
     conn.close()
+
+    for item in items:
+        try:
+            requests.post(
+                f"{INVENTORY_SERVICE_URL}/inventory/{item['product_id']}/release",
+                json={"quantity": item["quantity"]},
+                timeout=5
+            )
+        except requests.RequestException:
+            pass
+
     return jsonify({"message": "Order cancelled"}), 200
 
 

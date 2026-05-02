@@ -1,0 +1,110 @@
+name: SecureShop CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 0 * * 0'  # Weekly scan
+
+jobs:
+  # 1. SAST with SARIF output
+  sast:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Run Trivy SAST
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+      
+      - name: Upload Trivy to Security Tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+          category: 'sast-trivy'
+
+  # 2. SCA with SARIF
+  sca:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: OWASP Dependency Check with SARIF
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: 'SecureShop'
+          path: '.'
+          format: 'SARIF'
+          out: 'reports'
+      
+      - name: Upload SCA to Security Tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: reports/dependency-check-report.sarif
+          category: 'sca-dependency-check'
+
+  # 3. Container Scan with SARIF
+  container-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Build Image
+        run: docker-compose build
+      
+      - name: Scan Container with SARIF
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'secureshop-devsecops-user-service:latest'
+          format: 'sarif'
+          output: 'container-results.sarif'
+      
+      - name: Upload Container Scan to Security Tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: container-results.sarif
+          category: 'container-trivy'
+
+  # 4. IaC Scan with SARIF
+  iac-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Checkov IaC Scan
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: .
+          output_format: 'sarif'
+          output_file_path: 'iac-results.sarif'
+      
+      - name: Upload IaC to Security Tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: iac-results.sarif
+          category: 'iac-checkov'
+
+  # 5. Secrets Detection
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: TruffleHog with SARIF
+        uses: trufflesecurity/trufflehog@main
+        with:
+          extra_args: --results=verified,unknown --sarif --output results.sarif
+      
+      - name: Upload Secrets to Security Tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
+          category: 'secrets-trufflehog'
